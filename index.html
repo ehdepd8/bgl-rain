@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-  <title>BGL 역사 누수 관리 시스템</title>
+  <title>BGL 역사 누수관리 시스템</title>
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
@@ -32,6 +32,20 @@
     }
 
     .group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+    /* 앱 타이틀 로고 배지 */
+    .app-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: -0.5px;
+      padding-right: 8px;
+      border-right: 2px solid #cbd5e1;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
     
     select, button, label.btn-file {
       font-size: 13px;
@@ -65,15 +79,16 @@
     .btn-sub { background: #eef2f6; font-size: 12px; padding: 6px 8px; border-color: #cfd8dc; }
     .btn-sub:hover { background: #e2e8f0; }
 
-    /* 클라우드 동기화 뱃지 */
+    /* 클라우드 동기화 배지 */
     .sync-status {
       font-size: 11px;
-      padding: 3px 6px;
+      padding: 4px 7px;
       border-radius: 4px;
       background: #e6ffed;
       color: #1a7f37;
       border: 1px solid #a7f3d0;
       font-weight: bold;
+      white-space: nowrap;
     }
 
     /* 지도 캔버스 */
@@ -209,26 +224,42 @@
   <!-- 상단 컨트롤 툴바 -->
   <div id="top-bar">
     <div class="group">
+      <!-- 앱 타이틀 -->
+      <span class="app-title">💧 BGL 누수관리</span>
+
+      <!-- 21개 역사 셀렉터 -->
       <select id="stationSelect">
         <option value="daejeo" selected>대저역</option>
         <option value="sasang">사상역</option>
+        <option value="gwaebeop">괘법르네시떼</option>
+        <option value="seobusan">서부산유통지구</option>
         <option value="airport">공항역</option>
+        <option value="deokdu">덕두역</option>
+        <option value="dengu">등구역</option>
+        <option value="pyeonggang">평강역</option>
+        <option value="sinryeo">신원역</option>
+        <option value="bisa">상식역</option>
+        <option value="gimhae_city">김해시청</option>
+        <option value="inji">인제대</option>
+        <option value="gimhae_college">김해대학</option>
         <option value="kayadae">가야대역</option>
       </select>
 
+      <!-- 층수 퀵 줌 -->
       <select id="floorSelect">
         <option value="all">도면 전체</option>
         <option value="3f">지상3층 (승강장)</option>
         <option value="2f">지상2층 (대합실)</option>
       </select>
 
+      <!-- 도면 테마 (기본: 화이트 원본) -->
       <select id="cadThemeSelect">
         <option value="white" selected>도면 원본(화이트)</option>
         <option value="dark">CAD 다크</option>
         <option value="blueprint">청사진 (Blue)</option>
       </select>
 
-      <span class="sync-status" id="syncStatus">● bgl-leak-tracker 연결됨</span>
+      <span class="sync-status" id="syncStatus">● 실시간 연결됨</span>
     </div>
 
     <div class="group">
@@ -287,12 +318,12 @@
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <!-- Firebase 모듈 -->
+  <!-- Firebase 실시간 연동 스크립트 -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getDatabase, ref, set, push, onValue, remove, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-    // 새 프로젝트(bgl-leak-tracker) 설정값 적용
+    // Firebase DB 설정값
     const firebaseConfig = {
       apiKey: "AIzaSyBcxfuqLm49gfdQNTKhAm2GLD6y4g6KNmM",
       authDomain: "bgl-leak-tracker.firebaseapp.com",
@@ -339,7 +370,7 @@
     let currentOverlay = null;
     let currentStation = stationSelect.value;
 
-    // Leaflet 맵 초기화
+    // Leaflet 맵 인스턴스 초기화
     const map = L.map('map', {
       crs: L.CRS.Simple,
       minZoom: -1.5,
@@ -349,7 +380,7 @@
     });
     map.fitBounds(bounds);
 
-    // 테마 적용 (기본: 원본 화이트)
+    // 도면 테마 적용 함수
     function applyCadTheme() {
       const theme = cadThemeSelect ? cadThemeSelect.value : 'white';
       const mapEl = document.getElementById('map');
@@ -362,12 +393,13 @@
         mapEl.style.backgroundColor = '#0b2545';
         if (overlayEl) overlayEl.style.filter = 'invert(1) sepia(1) saturate(5) hue-rotate(175deg)';
       } else {
+        // 도면 원본 (화이트)
         mapEl.style.backgroundColor = '#ffffff';
         if (overlayEl) overlayEl.style.filter = 'none';
       }
     }
 
-    // 도면 로드
+    // 도면 로드 함수
     function loadPlanImage(src, w, h) {
       if (currentOverlay) map.removeLayer(currentOverlay);
       imgW = w || imgW;
@@ -380,8 +412,10 @@
       setTimeout(applyCadTheme, 50);
     }
 
+    // 기본 대저역 도면 로드
     loadPlanImage('daejeo.png', 1231, 860);
 
+    // 도면 직접 교체
     document.getElementById('imageInput').addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -406,6 +440,7 @@
       });
     }
 
+    // 마커 팝업 생성
     function updateMarkerPopup(item) {
       const popupHtml = `
         <div class="custom-popup-content">
@@ -420,7 +455,7 @@
       item.markerObj.bindPopup(popupHtml);
     }
 
-    // Firebase 실시간 동기화 수신
+    // Firebase 실시간 리스너
     function listenToStationLeaks(station) {
       const stationRef = ref(db, `leak_records/${station}`);
       onValue(stationRef, (snapshot) => {
@@ -463,7 +498,7 @@
       listenToStationLeaks(currentStation);
     });
 
-    // 목록 렌더링
+    // 목록 리렌더링
     function renderList() {
       markerCountBadge.textContent = leakMarkers.length;
       if (leakMarkers.length === 0) {
@@ -520,7 +555,7 @@
       addMarkerBtn.classList.remove('active');
     });
 
-    // 수정/삭제 전역 함수
+    // 전역 수정/삭제 바인딩
     window.openEditModal = function(key) {
       const item = leakMarkers.find(m => m.fbKey === key);
       if (!item) return;
@@ -588,7 +623,7 @@
       editingFirebaseKey = null;
     });
 
-    // 테마 / 층수 / 사이드패널 이벤트
+    // UI 이벤트 바인딩
     cadThemeSelect.addEventListener('change', applyCadTheme);
 
     floorSelect.addEventListener('change', function(e) {
@@ -605,6 +640,7 @@
     toggleListBtn.addEventListener('click', () => sidePanel.classList.toggle('open'));
     closePanelBtn.addEventListener('click', () => sidePanel.classList.remove('open'));
 
+    // 초기 테마 실행
     applyCadTheme();
   </script>
 </body>
