@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <title>경전철 역사 누수점검 관리 시스템</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background-color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    
+    #map { width: 100vw; height: 100vh; background-color: #1e293b; z-index: 10; }
+
+    /* 커스텀 마커 스타일 */
+    .leak-pin {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      border: 2px solid #ffffff;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+      cursor: pointer;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .leak-pin:hover {
+      transform: rotate(-45deg) scale(1.2);
+    }
+    .leak-pin > span {
+      transform: rotate(45deg);
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 11px;
+      letter-spacing: -0.5px;
+    }
+
+    /* 심각도 색상 */
+    .pin-critical { background: linear-gradient(135deg, #ef4444, #991b1b); }
+    .pin-warning { background: linear-gradient(135deg, #f97316, #c2410c); }
+    .pin-minor { background: linear-gradient(135deg, #10b981, #047857); }
+
+    /* 긴급 펄스 애니메이션 */
+    .pin-pulse::after {
+      content: '';
+      position: absolute;
+      top: -6px; left: -6px; right: -6px; bottom: -6px;
+      border-radius: 50%;
+      border: 3px solid #ef4444;
+      animation: pulse-ring 1.4s infinite cubic-bezier(0.24, 0, 0.38, 1);
+      pointer-events: none;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.6); opacity: 1; }
+      100% { transform: scale(1.6); opacity: 0; }
+    }
+
+    /* 모바일 가로모드 컴팩트 툴바 최적화 */
+    @media (max-height: 500px) and (orientation: landscape) {
+      #top-bar { padding: 4px 8px; }
+      .compact-hide { display: none; }
+      .header-title { font-size: 12px; }
+    }
+
+    /* 스크롤바 커스텀 */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #1e293b; }
+    ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+  </style>
+</head>
+<body class="text-slate-100 select-none">
+
+  <!-- 상단 반응형 플로팅 헤더 바 -->
+  <header id="top-bar" class="absolute top-2 left-2 right-2 md:top-4 md:left-4 md:right-4 z-30 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl px-3 py-2 shadow-2xl flex flex-wrap items-center justify-between gap-2 transition-all">
+    
+    <div class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-lg bg-cyan-600 flex items-center justify-center text-white shadow-md">
+        <i class="fa-solid fa-droplet"></i>
+      </div>
+      <div>
+        <h1 class="header-title font-bold text-sm md:text-base leading-tight text-cyan-400">경전철 누수 통합점검</h1>
+        <p class="compact-hide text-[10px] text-slate-400 leading-none">사상 ~ 가야대 21개 역사 현장대응</p>
+      </div>
+    </div>
+
+    <!-- 역사 선택 셀렉트박스 (21개 전 역사) -->
+    <div class="flex items-center gap-1.5 flex-wrap">
+      <div class="relative">
+        <select id="stationSelect" class="bg-slate-800 text-xs md:text-sm font-medium border border-slate-600 rounded-lg px-2.5 py-1.5 pr-7 focus:outline-none focus:ring-2 focus:ring-cyan-500 text-white cursor-pointer shadow-inner">
+          <!-- JS로 사상~가야대 21개역 자동 주입 -->
+        </select>
+      </div>
+
+      <!-- 층수 퀵 포커스 버튼 그룹 -->
+      <div class="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700 text-xs font-medium">
+        <button id="btnZoomAll" class="px-2 py-1 rounded bg-slate-700 text-cyan-300 font-bold transition hover:bg-slate-600">전체</button>
+        <button id="btnZoom3F" class="px-2 py-1 rounded text-slate-300 transition hover:bg-slate-700 hover:text-white">3F 승강장</button>
+        <button id="btnZoom2F" class="px-2 py-1 rounded text-slate-300 transition hover:bg-slate-700 hover:text-white">2F 대합실</button>
+      </div>
+    </div>
+
+    <!-- 우측 도구 액션 버튼들 -->
+    <div class="flex items-center gap-2">
+      <!-- 누수 등록 모드 토글 -->
+      <button id="btnToggleAdd" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs md:text-sm font-bold shadow-md transition transform active:scale-95">
+        <i class="fa-solid fa-crosshairs"></i>
+        <span id="txtAddBtn">마커 등록</span>
+      </button>
+
+      <!-- 평면도 교체 업로드 (daejeo.png 등 선택) -->
+      <label class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-medium text-slate-200 cursor-pointer shadow transition" title="평면도 이미지 파일(daejeo.png) 교체">
+        <i class="fa-solid fa-image text-cyan-400"></i>
+        <span class="compact-hide">도면변경</span>
+        <input type="file" id="mapFileInput" accept="image/*" class="hidden">
+      </label>
+
+      <!-- 현황 목록 사이드패널 열기 -->
+      <button id="btnOpenList" class="relative flex items-center justify-center w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 transition" title="누수 개소 목록">
+        <i class="fa-solid fa-list-check"></i>
+        <span id="badgeCount" class="absolute -top-1.5 -right-1.5 bg-rose-600 text-white text-[10px] font-black rounded-full px-1.5 py-0.2 shadow">0</span>
+      </button>
+
+      <!-- 데이터 백업/내보내기 메뉴 열기 -->
+      <button id="btnOpenDataModal" class="flex items-center justify-center w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 transition" title="데이터 관리(JSON)">
+        <i class="fa-solid fa-gear"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- 등록 안내 배너 (마커 등록 모드일 때만 표시) -->
+  <div id="addInstructionBanner" class="hidden absolute top-16 md:top-20 left-1/2 transform -translate-x-1/2 z-30 bg-rose-600/95 text-white text-xs md:text-sm px-4 py-2 rounded-full shadow-2xl font-bold flex items-center gap-2 border border-rose-400 animate-bounce">
+    <i class="fa-solid fa-location-dot"></i>
+    <span>도면에서 누수가 발생한 위치를 터치/클릭하세요!</span>
+    <button id="btnCancelAdd" class="ml-2 bg-black/30 hover:bg-black/50 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">✕</button>
+  </div>
+
+  <!-- 지도 캔버스 -->
+  <main id="map"></main>
+
+  <!-- 드래그앤드롭 도면 교체 오버레이 -->
+  <div id="dropZone" class="pointer-events-none fixed inset-0 z-40 bg-cyan-900/40 backdrop-blur-sm border-4 border-dashed border-cyan-400 flex flex-col items-center justify-center text-cyan-200 text-xl font-bold opacity-0 transition-opacity">
+    <i class="fa-solid fa-cloud-arrow-up text-5xl mb-3"></i>
+    <span>여기에 평면도 이미지(PNG/JPG)를 놓으면 즉시 교체됩니다</span>
+  </div>
+
+  <!-- 우측 슬라이드 인/아웃 누수 현황 패널 -->
+  <aside id="sidePanel" class="fixed top-0 right-0 bottom-0 w-full sm:w-96 bg-slate-900/95 backdrop-blur-xl border-l border-slate-700/80 z-40 transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col shadow-2xl">
+    <!-- 패널 헤더 -->
+    <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <i class="fa-solid fa-clipboard-list text-cyan-400 text-lg"></i>
+        <div>
+          <h2 class="font-bold text-sm text-slate-100" id="panelStationTitle">대저역 누수 현황</h2>
+          <p class="text-[11px] text-slate-400">총 <span id="panelLeakTotal" class="text-cyan-400 font-bold">0</span>건 등록됨</p>
+        </div>
+      </div>
+      <button id="btnClosePanel" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <!-- 심각도별 요약 카드 -->
+    <div class="grid grid-cols-3 gap-2 p-3 bg-slate-950/40 border-b border-slate-800 text-center">
+      <div class="p-2 rounded bg-rose-950/40 border border-rose-800/40">
+        <div class="text-[10px] text-rose-400 font-bold">긴급(낙수)</div>
+        <div id="statCritical" class="text-lg font-black text-rose-400">0</div>
+      </div>
+      <div class="p-2 rounded bg-orange-950/40 border border-orange-800/40">
+        <div class="text-[10px] text-orange-400 font-bold">주의(번짐)</div>
+        <div id="statWarning" class="text-lg font-black text-orange-400">0</div>
+      </div>
+      <div class="p-2 rounded bg-emerald-950/40 border border-emerald-800/40">
+        <div class="text-[10px] text-emerald-400 font-bold">경미(습기)</div>
+        <div id="statMinor" class="text-lg font-black text-emerald-400">0</div>
+      </div>
+    </div>
+
+    <!-- 누수 개소 리스트 -->
+    <div class="flex-1 overflow-y-auto p-3 space-y-2.5" id="leakListContainer">
+      <!-- JS로 누수 항목 카드 렌더링 -->
+    </div>
+  </aside>
+
+  <!-- 누수 등록/수정 모달 다이얼로그 -->
+  <div id="markerModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95">
+      <div class="px-5 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
+        <h3 id="modalTitle" class="font-bold text-base text-cyan-400 flex items-center gap-2">
+          <i class="fa-solid fa-circle-exclamation"></i>
+          <span>누수 개소 등록</span>
+        </h3>
+        <button id="btnModalClose" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+
+      <form id="markerForm" class="p-5 space-y-4">
+        <input type="hidden" id="leakId">
+        <input type="hidden" id="leakCoordX">
+        <input type="hidden" id="leakCoordY">
+
+        <!-- 심각도 선택 라디오 버튼 -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">위험/심각도 수준</label>
+          <div class="grid grid-cols-3 gap-2">
+            <label class="cursor-pointer">
+              <input type="radio" name="severity" value="critical" class="peer hidden" checked>
+              <div class="py-2 text-center rounded-lg border border-slate-700 bg-slate-800 text-xs font-bold text-slate-300 peer-checked:bg-rose-600 peer-checked:text-white peer-checked:border-rose-500 transition">
+                <i class="fa-solid fa-triangle-exclamation mr-1"></i>긴급
+              </div>
+            </label>
+            <label class="cursor-pointer">
+              <input type="radio" name="severity" value="warning" class="peer hidden">
+              <div class="py-2 text-center rounded-lg border border-slate-700 bg-slate-800 text-xs font-bold text-slate-300 peer-checked:bg-orange-600 peer-checked:text-white peer-checked:border-orange-500 transition">
+                <i class="fa-solid fa-circle-exclamation mr-1"></i>주의
+              </div>
+            </label>
+            <label class="cursor-pointer">
+              <input type="radio" name="severity" value="minor" class="peer hidden">
+              <div class="py-2 text-center rounded-lg border border-slate-700 bg-slate-800 text-xs font-bold text-slate-300 peer-checked:bg-emerald-600 peer-checked:text-white peer-checked:border-emerald-500 transition">
+                <i class="fa-solid fa-circle-info mr-1"></i>경미
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- 층수 및 위치 명칭 -->
+        <div class="grid grid-cols-3 gap-2">
+          <div class="col-span-1">
+            <label class="block text-xs font-semibold text-slate-300 mb-1">층수 구분</label>
+            <select id="leakFloor" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white focus:ring-2 focus:ring-cyan-500">
+              <option value="3F">3F 승강장</option>
+              <option value="2F">2F 대합실</option>
+              <option value="1F">1F 외부/출구</option>
+              <option value="ETC">기타/통로</option>
+            </select>
+          </div>
+          <div class="col-span-2">
+            <label class="block text-xs font-semibold text-slate-300 mb-1">위치 명칭</label>
+            <input type="text" id="leakTitle" placeholder="예: 상행 승강장 2번홈 천장" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:ring-2 focus:ring-cyan-500">
+          </div>
+        </div>
+
+        <!-- 상태 진행사항 -->
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">조치 상태</label>
+            <select id="leakStatus" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white focus:ring-2 focus:ring-cyan-500">
+              <option value="발생">발생 (조치대기)</option>
+              <option value="유도판설치">유도판/물받이 설치</option>
+              <option value="방수공사중">방수/보수 공사중</option>
+              <option value="조치완료">조치완료 (관찰)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">발견 일자</label>
+            <input type="date" id="leakDate" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:ring-2 focus:ring-cyan-500">
+          </div>
+        </div>
+
+        <!-- 상세 설명 및 특이사항 -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">상세 현황 및 조치 메모</label>
+          <textarea id="leakMemo" rows="3" placeholder="예: 우천 시 뚝뚝 떨어짐, 하부 바가지 설치 완료, 배전반과의 이격 1.5m 유지 중" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:ring-2 focus:ring-cyan-500"></textarea>
+        </div>
+
+        <!-- 팝업 버튼 제어 -->
+        <div class="flex items-center justify-between pt-2 border-t border-slate-800">
+          <button type="button" id="btnDeleteLeak" class="hidden px-3 py-2 bg-rose-950 text-rose-400 border border-rose-800 hover:bg-rose-900 rounded-lg text-xs font-bold transition">
+            <i class="fa-solid fa-trash-can mr-1"></i>삭제
+          </button>
+          <div class="flex items-center gap-2 ml-auto">
+            <button type="button" id="btnCancelModal" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium">취소</button>
+            <button type="submit" class="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg text-xs shadow-lg transition">저장</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 데이터 백업/내보내기 관리 모달 -->
+  <div id="dataModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl p-5 space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <h3 class="font-bold text-base text-slate-100 flex items-center gap-2">
+          <i class="fa-solid fa-database text-cyan-400"></i>
+          <span>누수 점검 데이터 백업 및 연동</span>
+        </h3>
+        <button id="btnCloseDataModal" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+
+      <p class="text-xs text-slate-400 leading-relaxed">
+        현재 브라우저(LocalStorage)에 저장된 21개 역사의 누수 점검 기록을 JSON 파일로 백업하거나, 다른 기기에서 내보낸 데이터를 불러올 수 있습니다.
+      </p>
+
+      <div class="space-y-2">
+        <button id="btnExportJSON" class="w-full py-2.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-cyan-300 text-xs font-bold flex items-center justify-center gap-2 transition">
+          <i class="fa-solid fa-download"></i> 전체 점검데이터 백업파일(.json) 저장
+        </button>
+
+        <label class="w-full py-2.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-emerald-400 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition">
+          <i class="fa-solid fa-upload"></i> 백업데이터(.json) 불러오기
+          <input type="file" id="importJSONInput" accept=".json" class="hidden">
+        </label>
+
+        <button id="btnResetData" class="w-full py-2 px-3 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-800/80 text-rose-400 text-xs font-medium flex items-center justify-center gap-1 transition">
+          <i class="fa-solid fa-arrow-rotate-left"></i> 대저역 샘플데이터로 초기화
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    /* ==========================================================================
+       1. 부산-김해경전철 21개 전체 역사 목록 및 데이터 정의
+       ========================================================================== */
+    const STATIONS = [
+      { id: "sasang", name: "사상역" },
+      { id: "gwaebeop", name: "괘법르네시떼역" },
+      { id: "seobubusan", name: "서부산유통지구역" },
+      { id: "gimhae_airport", name: "공항역" },
+      { id: "deokdu", name: "덕두역" },
+      { id: "deokgu", name: "등구역" },
+      { id: "daejeo", name: "대저역 (샘플도면 탑재)" },
+      { id: "pyeonggang", name: "평강역" },
+      { id: "daesa", name: "대사역" },
+      { id: "buram", name: "불암역" },
+      { id: "jinae", name: "지내역" },
+      { id: "gimhae_college", name: "김해대학역" },
+      { id: "inje_univ", name: "인제대역" },
+      { id: "gimhae_cityhall", name: "김해시청역" },
+      { id: "buwon", name: "부원역" },
+      { id: "bonghwang", name: "봉황역" },
+      { id: "surwangneung", name: "수로왕릉역" },
+      { id: "museum", name: "박물관역" },
+      { id: "yeonji_park", name: "연지공원역" },
+      { id: "presbyterian_univ", name: "장신대역" },
+      { id: "gayadae", name: "가야대역" }
+    ];
+
+    // 평면도 도면 가상 해상도 (업로드해주신 daejeo.png 종횡비 1231 x 860 기준)
+    const PLAN_WIDTH = 1231;
+    const PLAN_HEIGHT = 860;
+    const MAP_BOUNDS = [[0, 0], [PLAN_HEIGHT, PLAN_WIDTH]];
+
+    // 로컬 스토리지 키
+    const STORAGE_KEY = "metro_leak_management_v2";
+
+    // 대저역 기본 샘플 데이터
+    const DEFAULT_LEAKS = {
+      daejeo: [
+        {
+          id: "DJ-2026-001",
+          stationId: "daejeo",
+          x: 580,
+          y: 690,
+          floor: "3F",
+          title: "3층 승강장 기지방면 천장 누수",
+          severity: "critical",
+          status: "유도판설치",
+          date: "2026-10-15",
+          memo: "상행선 1-2번 스크린도어 상부 H빔 결로 및 우천 누수. 하부 물받이 설치 완료."
+        },
+        {
+          id: "DJ-2026-002",
+          stationId: "daejeo",
+          x: 420,
+          y: 280,
+          floor: "2F",
+          title: "2층 3호선 환승통로 벽체 번짐",
+          severity: "warning",
+          status: "발생",
+          date: "2026-10-18",
+          memo: "부산 3호선 연결통로 계단부 크랙으로 백화 및 번짐 현상 진행 중."
+        },
+        {
+          id: "DJ-2026-003",
+          stationId: "daejeo",
+          x: 645,
+          y: 220,
+          floor: "2F",
+          title: "2층 화장실 인근 설비피트",
+          severity: "minor",
+          status: "조치완료",
+          date: "2026-10-12",
+          memo: "오수관 드레인 패킹 마모 부위 실리콘 코킹 조치 완료."
+        }
+      ]
+    };
+
+    // 전역 애플리케이션 상태
+    let currentStationId = "daejeo";
+    let isAddMode = false;
+    let allLeakData = loadDataFromStorage();
+    let leafletMarkers = [];
+    let imageOverlayLayer = null;
+
+    /* ==========================================================================
+       2. 대저역 내장 정밀 벡터 SVG 도면 생성기
+       ========================================================================== */
+    function generateStationSVG(stationName) {
+      return `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${PLAN_WIDTH} ${PLAN_HEIGHT}" width="100%" height="100%" style="background:#ffffff;">
+        <defs>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f1f5f9" stroke-width="1"/>
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grid)" />
+        <rect x="15" y="15" width="${PLAN_WIDTH - 30}" height="${PLAN_HEIGHT - 30}" fill="none" stroke="#000000" stroke-width="2"/>
+
+        <!-- 지상 3층 승강장 층 (상단) -->
+        <g id="floor-3f">
+          <text x="180" y="150" font-size="16" font-weight="bold" fill="#000">시점방향 (사상방향)</text>
+          <text x="960" y="150" font-size="16" font-weight="bold" fill="#000">종점방향 (기지/가야대방향)</text>
+          <text x="500" y="325" font-size="18" font-weight="bold" fill="#000">대저역 지상3층 평면도(승강장층)</text>
+
+          <!-- 3층 궤도 (중앙 열차 홈) -->
+          <rect x="440" y="120" width="260" height="35" rx="10" fill="#111827"/>
+          <rect x="440" y="165" width="260" height="35" rx="10" fill="#111827"/>
+          
+          <!-- 상/하행 승강장 구조체 -->
+          <rect x="250" y="60" width="670" height="65" fill="#ffffff" stroke="#000000" stroke-width="2.5"/>
+          <rect x="250" y="200" width="670" height="70" fill="#ffffff" stroke="#000000" stroke-width="2.5"/>
+
+          <!-- 3층 계단 및 EV -->
+          <rect x="360" y="80" width="80" height="30" fill="#e2e8f0" stroke="#000" stroke-width="1.5"/>
+          <rect x="650" y="80" width="80" height="30" fill="#e2e8f0" stroke="#000" stroke-width="1.5"/>
+          <rect x="560" y="65" width="35" height="30" fill="#cbd5e1" stroke="#000" stroke-width="1.5"/>
+
+          <rect x="360" y="225" width="80" height="30" fill="#e2e8f0" stroke="#000" stroke-width="1.5"/>
+          <rect x="650" y="225" width="80" height="30" fill="#e2e8f0" stroke="#000" stroke-width="1.5"/>
+          <rect x="560" y="235" width="35" height="30" fill="#cbd5e1" stroke="#000" stroke-width="1.5"/>
+
+          <!-- 외부 계단실 -->
+          <rect x="270" y="270" width="90" height="70" fill="#f8fafc" stroke="#000" stroke-width="1.5"/>
+        </g>
+
+        <!-- 지상 2층 대합실 층 (하단) -->
+        <g id="floor-2f" transform="translate(0, 420)">
+          <text x="70" y="210" font-size="16" font-weight="bold" fill="#000">시점방향 (사상방향)</text>
+          <text x="960" y="210" font-size="16" font-weight="bold" fill="#000">종점방향 (기지방향)</text>
+          <text x="500" y="360" font-size="18" font-weight="bold" fill="#000">대저역 지상2층 평면도(대합실층)</text>
+
+          <!-- 3호선 환승 연결통로 브릿지 -->
+          <path d="M 160 50 L 330 50 L 330 110 L 160 110 Z" fill="#f1f5f9" stroke="#000" stroke-width="2"/>
+          <rect x="330" y="25" width="220" height="40" fill="#e2e8f0" stroke="#000" stroke-width="2"/>
+          <text x="210" y="85" font-size="12" font-weight="bold" fill="#2563eb">부산지하철 3호선 연결통로 ▼</text>
+
+          <!-- 대합실 메인 바디 -->
+          <rect x="250" y="90" width="670" height="200" fill="#ffffff" stroke="#000000" stroke-width="3"/>
+
+          <!-- 주요 기둥들 -->
+          <rect x="250" y="90" width="25" height="25" fill="#000"/>
+          <rect x="250" y="180" width="25" height="25" fill="#000"/>
+          <rect x="360" y="180" width="22" height="22" fill="#000"/>
+          <rect x="530" y="180" width="22" height="22" fill="#000"/>
+          <rect x="700" y="180" width="22" height="22" fill="#000"/>
+          <rect x="895" y="90" width="25" height="25" fill="#000"/>
+          <rect x="895" y="180" width="25" height="25" fill="#000"/>
+          <rect x="895" y="265" width="25" height="25" fill="#000"/>
+
+          <!-- 개찰구/게이트 라인 -->
+          <g stroke="#0284c7" stroke-width="3">
+            <line x1="440" y1="160" x2="440" y2="200" stroke-dasharray="4,3"/>
+          </g>
+
+          <!-- 역무실, 기능실 구역 -->
+          <rect x="720" y="90" width="200" height="110" fill="#f8fafc" stroke="#000" stroke-width="1.5"/>
+          <rect x="640" y="120" width="80" height="60" fill="#f1f5f9" stroke="#000" stroke-width="1.5"/>
+          <text x="760" y="150" font-size="13" font-weight="bold" fill="#475569">역무관리실 / 전기실</text>
+
+          <!-- 남/녀 화장실 -->
+          <rect x="640" y="200" width="80" height="90" fill="#f1f5f9" stroke="#000" stroke-width="1.5"/>
+          <text x="655" y="250" font-size="12" font-weight="bold" fill="#64748b">화장실</text>
+
+          <!-- 에스컬레이터 / 계단 연결부 -->
+          <rect x="280" y="290" width="80" height="120" fill="#e2e8f0" stroke="#000" stroke-width="1.5"/>
+        </g>
+      </svg>`;
+    }
+
+    /* ==========================================================================
+       3. Leaflet 맵 초기화 및 터치/마우스 이벤트 완벽 대응
+       ========================================================================== */
+    const map = L.map('map', {
+      crs: L.CRS.Simple,
+      minZoom: -2,
+      maxZoom: 3,
+      zoomSnap: 0.1,
+      zoomDelta: 0.3,
+      wheelPxPerZoomLevel: 90, // PC 마우스 휠 부드러운 줌
+      attributionControl: false,
+      tap: false // 모바일 더블탭 딜레이 방지
+    });
+
+    // 도면 레이어 갱신 함수
+    function setFloorPlanImage(imageSrc) {
+      if (imageOverlayLayer) {
+        map.removeLayer(imageOverlayLayer);
+      }
+      imageOverlayLayer = L.imageOverlay(imageSrc, MAP_BOUNDS).addTo(map);
+      map.fitBounds(MAP_BOUNDS);
+      map.setMaxBounds([[ -300, -300 ], [ PLAN_HEIGHT + 300, PLAN_WIDTH + 300 ]]);
+    }
+
+    // 기본 대저역 내장 SVG 적용
+    const defaultSvgDataUrl = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(generateStationSVG("대저역"));
+    setFloorPlanImage(defaultSvgDataUrl);
+
+    // 역사 셀렉트 박스 채우기
+    const stationSelect = document.getElementById('stationSelect');
+    STATIONS.forEach(st => {
+      const opt = document.createElement('option');
+      opt.value = st.id;
+      opt.textContent = st.name;
+      if (st.id === 'daejeo') opt.selected = true;
+      stationSelect.appendChild(opt);
+    });
+
+    /* ==========================================================================
+       4. 마커 시각화 및 팝업/인터랙션
+       ========================================================================== */
+    function getSeverityClass(sev) {
+      if (sev === 'critical') return 'pin-critical pin-pulse';
+      if (sev === 'warning') return 'pin-warning';
+      return 'pin-minor';
+    }
+
+    function createCustomMarkerIcon(leak, index) {
+      const sevClass = getSeverityClass(leak.severity);
+      return L.divIcon({
+        className: 'custom-leak-container',
+        html: `
+          <div class="leak-pin ${sevClass}" title="${leak.title}">
+            <span>${leak.floor || index}</span>
+          </div>
+        `,
+        iconSize: [32, 32],
+        iconAnchor: [6, 26],
+        popupAnchor: [10, -26]
+      });
+    }
+
+    // 현재 선택된 역사의 마커 렌더링
+    function renderMarkers() {
+      // 기존 마커 전체 제거
+      leafletMarkers.forEach(m => map.removeLayer(m));
+      leafletMarkers = [];
+
+      const currentList = allLeakData[currentStationId] || [];
+
+      currentList.forEach((leak, idx) => {
+        const marker = L.marker([leak.y, leak.x], {
+          icon: createCustomMarkerIcon(leak, idx + 1),
+          riseOnHover: true
+        }).addTo(map);
+
+        // 팝업 내용
+        const popupContent = `
+          <div class="p-2 min-w-[200px] text-slate-900 font-sans">
+            <div class="flex items-center justify-between gap-2 border-b pb-1.5 mb-1.5">
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded text-white ${leak.severity === 'critical' ? 'bg-rose-600' : leak.severity === 'warning' ? 'bg-orange-500' : 'bg-emerald-600'}">
+                ${leak.severity === 'critical' ? '긴급' : leak.severity === 'warning' ? '주의' : '경미'}
+              </span>
+              <span class="text-xs font-bold text-slate-500">${leak.floor} | ${leak.status}</span>
+            </div>
+            <h4 class="font-bold text-sm text-slate-800 leading-snug">${leak.title}</h4>
+            <p class="text-xs text-slate-600 my-1">${leak.memo || '상세 메모 없음'}</p>
+            <div class="text-[11px] text-slate-400 mb-2">발견일자: ${leak.date || '미기록'}</div>
+            <div class="flex justify-end gap-1.5 pt-1 border-t">
+              <button onclick="openEditModal('${leak.id}')" class="px-2.5 py-1 bg-cyan-600 text-white rounded text-xs font-semibold hover:bg-cyan-700">수정</button>
+            </div>
+          </div>
+        `;
+
+        marker.bindPopup(popupContent, { maxWidth: 280 });
+        leafletMarkers.push(marker);
+      });
+
+      updateStatsAndList();
+    }
+
+    // 마커 등록 모드 토글
+    const btnToggleAdd = document.getElementById('btnToggleAdd');
+    const txtAddBtn = document.getElementById('txtAddBtn');
+    const addInstructionBanner = document.getElementById('addInstructionBanner');
+
+    function setAddMode(active) {
+      isAddMode = active;
+      if (isAddMode) {
+        btnToggleAdd.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs md:text-sm font-bold shadow-md transition animate-pulse";
+        txtAddBtn.textContent = "등록 취소";
+        addInstructionBanner.classList.remove('hidden');
+      } else {
+        btnToggleAdd.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs md:text-sm font-bold shadow-md transition";
+        txtAddBtn.textContent = "마커 등록";
+        addInstructionBanner.classList.add('hidden');
+      }
+    }
+
+    btnToggleAdd.addEventListener('click', () => setAddMode(!isAddMode));
+    document.getElementById('btnCancelAdd').addEventListener('click', () => setAddMode(false));
+
+    // 도면 클릭 시 마커 신규 등록 팝업 호출
+    map.on('click', function(e) {
+      if (!isAddMode) return;
+      openCreateModal(e.latlng.lat, e.latlng.lng);
+      setAddMode(false);
+    });
+
+    /* ==========================================================================
+       5. 모달 및 누수 CRUD 처리
+       ========================================================================== */
+    const markerModal = document.getElementById('markerModal');
+    const markerForm = document.getElementById('markerForm');
+    const btnDeleteLeak = document.getElementById('btnDeleteLeak');
+
+    function openCreateModal(lat, lng) {
+      document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus-circle text-cyan-400"></i> 새 누수 개소 등록';
+      document.getElementById('leakId').value = "";
+      document.getElementById('leakCoordX').value = Math.round(lng);
+      document.getElementById('leakCoordY').value = Math.round(lat);
+      document.getElementById('leakTitle').value = "";
+      document.getElementById('leakMemo').value = "";
+      document.getElementById('leakDate').value = new Date().toISOString().split('T')[0];
+      document.getElementById('leakStatus').value = "발생";
+
+      // 클릭한 Y 좌표 위치에 따라 기본 층수 자동 추천 (상단=3F, 하단=2F)
+      document.getElementById('leakFloor').value = (lat > 400) ? "3F" : "2F";
+
+      btnDeleteLeak.classList.add('hidden');
+      markerModal.classList.remove('hidden');
+    }
+
+    window.openEditModal = function(id) {
+      const list = allLeakData[currentStationId] || [];
+      const item = list.find(l => l.id === id);
+      if (!item) return;
+
+      document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-pen-to-square text-cyan-400"></i> 누수 정보 수정';
+      document.getElementById('leakId').value = item.id;
+      document.getElementById('leakCoordX').value = item.x;
+      document.getElementById('leakCoordY').value = item.y;
+      document.getElementById('leakTitle').value = item.title;
+      document.getElementById('leakFloor').value = item.floor;
+      document.getElementById('leakStatus').value = item.status;
+      document.getElementById('leakDate').value = item.date;
+      document.getElementById('leakMemo').value = item.memo || "";
+
+      // 라디오 버튼 체크
+      const radios = document.getElementsByName('severity');
+      for (const r of radios) {
+        r.checked = (r.value === item.severity);
+      }
+
+      btnDeleteLeak.classList.remove('hidden');
+      markerModal.classList.remove('hidden');
+    };
+
+    function closeModal() {
+      markerModal.classList.add('hidden');
+    }
+
+    document.getElementById('btnModalClose').addEventListener('click', closeModal);
+    document.getElementById('btnCancelModal').addEventListener('click', closeModal);
+
+    markerForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      const id = document.getElementById('leakId').value;
+      const x = parseFloat(document.getElementById('leakCoordX').value);
+      const y = parseFloat(document.getElementById('leakCoordY').value);
+      const title = document.getElementById('leakTitle').value.trim();
+      const floor = document.getElementById('leakFloor').value;
+      const status = document.getElementById('leakStatus').value;
+      const date = document.getElementById('leakDate').value;
+      const memo = document.getElementById('leakMemo').value.trim();
+      
+      const radios = document.getElementsByName('severity');
+      let severity = "critical";
+      for (const r of radios) {
+        if (r.checked) severity = r.value;
+      }
+
+      if (!allLeakData[currentStationId]) {
+        allLeakData[currentStationId] = [];
+      }
+
+      if (id) {
+        // 기존 수정
+        const idx = allLeakData[currentStationId].findIndex(l => l.id === id);
+        if (idx !== -1) {
+          allLeakData[currentStationId][idx] = {
+            ...allLeakData[currentStationId][idx],
+            title, floor, status, date, memo, severity
+          };
+        }
+      } else {
+        // 신규 등록
+        const newId = `${currentStationId.toUpperCase()}-${Date.now().toString().slice(-5)}`;
+        allLeakData[currentStationId].push({
+          id: newId,
+          stationId: currentStationId,
+          x, y, floor, title, severity, status, date, memo
+        });
+      }
+
+      saveDataToStorage();
+      renderMarkers();
+      closeModal();
+    });
+
+    // 마커 삭제
+    btnDeleteLeak.addEventListener('click', function() {
+      const id = document.getElementById('leakId').value;
+      if (!id) return;
+      allLeakData[currentStationId] = allLeakData[currentStationId].filter(l => l.id !== id);
+      saveDataToStorage();
+      renderMarkers();
+      closeModal();
+    });
+
+    /* ==========================================================================
+       6. 우측 현황 패널 및 통계
+       ========================================================================== */
+    const sidePanel = document.getElementById('sidePanel');
+    const btnOpenList = document.getElementById('btnOpenList');
+    const btnClosePanel = document.getElementById('btnClosePanel');
+    const leakListContainer = document.getElementById('leakListContainer');
+
+    btnOpenList.addEventListener('click', () => sidePanel.classList.remove('translate-x-full'));
+    btnClosePanel.addEventListener('click', () => sidePanel.classList.add('translate-x-full'));
+
+    function updateStatsAndList() {
+      const currentList = allLeakData[currentStationId] || [];
+      const currentStationName = STATIONS.find(s => s.id === currentStationId)?.name || "역사";
+
+      document.getElementById('panelStationTitle').textContent = `${currentStationName} 누수 현황`;
+      document.getElementById('panelLeakTotal').textContent = currentList.length;
+      document.getElementById('badgeCount').textContent = currentList.length;
+
+      // 심각도 집계
+      const criticalCount = currentList.filter(l => l.severity === 'critical').length;
+      const warningCount = currentList.filter(l => l.severity === 'warning').length;
+      const minorCount = currentList.filter(l => l.severity === 'minor').length;
+
+      document.getElementById('statCritical').textContent = criticalCount;
+      document.getElementById('statWarning').textContent = warningCount;
+      document.getElementById('statMinor').textContent = minorCount;
+
+      // 목록 DOM 생성
+      leakListContainer.innerHTML = "";
+      if (currentList.length === 0) {
+        leakListContainer.innerHTML = `
+          <div class="text-center py-12 text-slate-500 text-xs">
+            <i class="fa-regular fa-folder-open text-3xl mb-2 block"></i>
+            등록된 누수 개소가 없습니다.<br>상단 [+ 마커 등록] 버튼을 눌러 추가하세요.
+          </div>
+        `;
+        return;
+      }
+
+      currentList.forEach((leak, idx) => {
+        const card = document.createElement('div');
+        const borderCol = leak.severity === 'critical' ? 'border-rose-500/60' : leak.severity === 'warning' ? 'border-orange-500/60' : 'border-emerald-500/60';
+        const tagCol = leak.severity === 'critical' ? 'bg-rose-950 text-rose-400' : leak.severity === 'warning' ? 'bg-orange-950 text-orange-400' : 'bg-emerald-950 text-emerald-400';
+
+        card.className = `p-3 rounded-xl bg-slate-800/80 border ${borderCol} hover:bg-slate-750 transition cursor-pointer shadow-md`;
+        card.innerHTML = `
+          <div class="flex items-center justify-between gap-1 mb-1">
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${tagCol}">
+              ${leak.severity === 'critical' ? '긴급(낙수)' : leak.severity === 'warning' ? '주의' : '경미'}
+            </span>
+            <span class="text-[11px] font-semibold text-cyan-400">${leak.floor} | ${leak.status}</span>
+          </div>
+          <h4 class="font-bold text-xs text-white leading-tight mb-1">${idx + 1}. ${leak.title}</h4>
+          <p class="text-[11px] text-slate-400 line-clamp-2">${leak.memo || '메모 없음'}</p>
+          <div class="flex items-center justify-between text-[10px] text-slate-500 mt-2 pt-1.5 border-t border-slate-700">
+            <span>발견: ${leak.date || '-'}</span>
+            <span class="text-cyan-400 hover:underline"><i class="fa-solid fa-location-crosshairs mr-1"></i>위치보기</span>
+          </div>
+        `;
+
+        // 카드 클릭 시 해당 마커로 자동 이동 및 팝업 열기
+        card.addEventListener('click', () => {
+          map.setView([leak.y, leak.x], 1.2, { animate: true });
+          const marker = leafletMarkers.find(m => {
+            const pos = m.getLatLng();
+            return Math.abs(pos.lat - leak.y) < 1 && Math.abs(pos.lng - leak.x) < 1;
+          });
+          if (marker) marker.openPopup();
+          if (window.innerWidth < 640) {
+            sidePanel.classList.add('translate-x-full');
+          }
+        });
+
+        leakListContainer.appendChild(card);
+      });
+    }
+
+    /* ==========================================================================
+       7. 층별 퀵 포커스 / 줌 컨트롤
+       ========================================================================== */
+    const btnZoomAll = document.getElementById('btnZoomAll');
+    const btnZoom3F = document.getElementById('btnZoom3F');
+    const btnZoom2F = document.getElementById('btnZoom2F');
+
+    function resetFloorBtnStyle() {
+      [btnZoomAll, btnZoom3F, btnZoom2F].forEach(btn => {
+        btn.className = "px-2 py-1 rounded text-slate-300 transition hover:bg-slate-700 hover:text-white";
+      });
+    }
+
+    btnZoomAll.addEventListener('click', () => {
+      resetFloorBtnStyle();
+      btnZoomAll.className = "px-2 py-1 rounded bg-slate-700 text-cyan-300 font-bold transition";
+      map.fitBounds(MAP_BOUNDS);
+    });
+
+    btnZoom3F.addEventListener('click', () => {
+      resetFloorBtnStyle();
+      btnZoom3F.className = "px-2 py-1 rounded bg-slate-700 text-cyan-300 font-bold transition";
+      // 상단 3층 승강장 영역으로 최적 뷰 이동
+      map.fitBounds([[480, 100], [820, 1150]]);
+    });
+
+    btnZoom2F.addEventListener('click', () => {
+      resetFloorBtnStyle();
+      btnZoom2F.className = "px-2 py-1 rounded bg-slate-700 text-cyan-300 font-bold transition";
+      // 하단 2층 대합실 영역으로 최적 뷰 이동
+      map.fitBounds([[50, 100], [450, 1150]]);
+    });
+
+    /* ==========================================================================
+       8. 역사 변경 및 도면 파일 교체/드래그앤드롭
+       ========================================================================== */
+    stationSelect.addEventListener('change', function(e) {
+      currentStationId = e.target.value;
+      const stObj = STATIONS.find(s => s.id === currentStationId);
+      
+      // 역사 전환 시 기본 SVG 도면 즉시 교체
+      const newSvg = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(generateStationSVG(stObj.name));
+      setFloorPlanImage(newSvg);
+      renderMarkers();
+    });
+
+    // 파일 선택으로 도면 교체 (daejeo.png 등 로컬 파일)
+    const mapFileInput = document.getElementById('mapFileInput');
+    mapFileInput.addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) handleImageFile(file);
+    });
+
+    // 드래그 앤 드롭으로 이미지 즉시 교체
+    const dropZone = document.getElementById('dropZone');
+    window.addEventListener('dragenter', (e) => { e.preventDefault(); dropZone.classList.remove('opacity-0'); });
+    window.addEventListener('dragover', (e) => { e.preventDefault(); });
+    window.addEventListener('dragleave', (e) => {
+      if (e.relatedTarget === null) dropZone.classList.add('opacity-0');
+    });
+    window.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('opacity-0');
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        handleImageFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    function handleImageFile(file) {
+      if (!file.type.startsWith('image/')) {
+        alert('이미지 파일(PNG, JPG)만 가능합니다.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        setFloorPlanImage(evt.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    /* ==========================================================================
+       9. 데이터 저장/내보내기/불러오기 (LocalStorage & JSON)
+       ========================================================================== */
+    function loadDataFromStorage() {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) return JSON.parse(stored);
+      } catch (err) {
+        console.error("저장소 로드 에러:", err);
+      }
+      return JSON.parse(JSON.stringify(DEFAULT_LEAKS));
+    }
+
+    function saveDataToStorage() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(allLeakData));
+      } catch (err) {
+        console.error("저장소 저장 에러:", err);
+      }
+    }
+
+    // 데이터 관리 모달
+    const dataModal = document.getElementById('dataModal');
+    document.getElementById('btnOpenDataModal').addEventListener('click', () => dataModal.classList.remove('hidden'));
+    document.getElementById('btnCloseDataModal').addEventListener('click', () => dataModal.classList.add('hidden'));
+
+    // JSON 다운로드
+    document.getElementById('btnExportJSON').addEventListener('click', function() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(allLeakData, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `경전철_누수점검현황_${new Date().toISOString().slice(0,10)}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    });
+
+    // JSON 불러오기
+    document.getElementById('importJSONInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        try {
+          const parsed = JSON.parse(evt.target.result);
+          allLeakData = parsed;
+          saveDataToStorage();
+          renderMarkers();
+          dataModal.classList.add('hidden');
+        } catch (err) {
+          alert('올바른 JSON 데이터 파일 형식이 아닙니다.');
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    // 기본값 초기화
+    document.getElementById('btnResetData').addEventListener('click', function() {
+      allLeakData = JSON.parse(JSON.stringify(DEFAULT_LEAKS));
+      saveDataToStorage();
+      renderMarkers();
+      dataModal.classList.add('hidden');
+    });
+
+    // 초기 마커 렌더링
+    renderMarkers();
+  </script>
+</body>
+</html>
