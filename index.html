@@ -10,7 +10,7 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body, html { width: 100%; height: 100%; overflow: hidden; background: #1a1a1a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif; }
 
-    /* 상단 통합 컨트롤 바 (모바일 가로모드 및 PC 호환) */
+    /* 상단 컨트롤 툴바 */
     #top-bar {
       position: absolute;
       top: 10px;
@@ -22,7 +22,7 @@
       align-items: center;
       justify-content: space-between;
       gap: 6px;
-      background: rgba(30, 30, 30, 0.92);
+      background: rgba(30, 30, 30, 0.94);
       padding: 8px 12px;
       border-radius: 8px;
       box-shadow: 0 4px 16px rgba(0,0,0,0.5);
@@ -97,7 +97,7 @@
       100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
     }
 
-    /* 사이드패널 (목록 확인) */
+    /* 사이드패널 */
     #side-panel {
       position: absolute;
       right: -320px;
@@ -144,7 +144,7 @@
     .leak-card.mid { border-left-color: #f59e0b; }
     .leak-card.low { border-left-color: #10b981; }
 
-    /* 커스텀 등록 모달창 (브라우저 팝업 차단 방지) */
+    /* 커스텀 등록 및 수정 모달창 */
     #markerModal {
       position: absolute;
       top: 50%;
@@ -158,7 +158,7 @@
       box-shadow: 0 10px 30px rgba(0,0,0,0.8);
       z-index: 2000;
       width: 90%;
-      max-width: 320px;
+      max-width: 340px;
       display: none;
       flex-direction: column;
       gap: 10px;
@@ -172,7 +172,21 @@
       color: #fff;
       font-size: 13px;
     }
-    .modal-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+    .modal-btns { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+
+    /* 리플릿 팝업 커스텀 */
+    .custom-popup-content { font-family: sans-serif; min-width: 150px; }
+    .popup-actions { display: flex; gap: 5px; margin-top: 8px; }
+    .popup-btn {
+      padding: 4px 8px;
+      font-size: 11px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      color: #fff;
+    }
+    .popup-btn-edit { background: #0d6efd; }
+    .popup-btn-del { background: #dc3545; }
   </style>
 </head>
 <body>
@@ -180,32 +194,19 @@
   <!-- 상단 컨트롤 툴바 -->
   <div id="top-bar">
     <div class="group">
-      <!-- 21개 역사 드롭다운 -->
       <select id="stationSelect">
         <option value="daejeo" selected>대저역 (샘플)</option>
         <option value="sasang">사상역</option>
-        <option value="gwaebeop">괘법르네시떼</option>
-        <option value="seobusan">서부산유통지구</option>
         <option value="airport">공항역</option>
-        <option value="deokdu">덕두역</option>
-        <option value="dengu">등구역</option>
-        <option value="pyeonggang">평강역</option>
-        <option value="sinryeo">신원역</option>
-        <option value="bisa">상식역</option>
-        <option value="gimhae_city">김해시청</option>
-        <option value="inji">인제대</option>
-        <option value="gimhae_college">김해대학</option>
         <option value="kayadae">가야대역</option>
       </select>
 
-      <!-- 층수 퀵 줌 -->
       <select id="floorSelect">
         <option value="all">도면 전체</option>
         <option value="3f">지상3층 (승강장)</option>
         <option value="2f">지상2층 (대합실)</option>
       </select>
 
-      <!-- 테마 변경 -->
       <select id="cadThemeSelect">
         <option value="dark" selected>CAD 다크</option>
         <option value="blueprint">청사진 (Blue)</option>
@@ -214,19 +215,17 @@
     </div>
 
     <div class="group">
-      <!-- 실물 도면 파일 교체 버튼 -->
-      <label class="btn-file" title="소장중인 도면 이미지로 교체">
+      <label class="btn-file" title="도면 파일 교체">
         📁 도면교체
         <input type="file" id="imageInput" accept="image/*" style="display:none;">
       </label>
 
-      <!-- 마커 추가 버튼 -->
       <button id="addMarkerBtn" class="btn-action">＋ 누수 마킹</button>
       <button id="toggleListBtn" class="btn-sub">📋 목록 (<span id="markerCountBadge">0</span>)</button>
     </div>
   </div>
 
-  <!-- 메인 맵 -->
+  <!-- 지도 캔버스 -->
   <div id="map"></div>
 
   <!-- 누수 목록 사이드패널 -->
@@ -240,15 +239,15 @@
     </div>
   </div>
 
-  <!-- 커스텀 등록 모달창 (팝업 차단 방지) -->
+  <!-- 누수 등록/수정 통합 모달창 -->
   <div id="markerModal">
-    <h4 style="font-size:15px; border-bottom:1px solid #444; padding-bottom:6px;">누수 개소 등록</h4>
+    <h4 id="modalTitleText" style="font-size:15px; border-bottom:1px solid #444; padding-bottom:6px;">누수 개소 등록</h4>
     <div>
       <label style="font-size:11px; color:#aaa;">구역/위치 명칭</label>
-      <input type="text" id="modalTitle" placeholder="예: 3층 하행 2번 게이트 인근">
+      <input type="text" id="modalTitle" placeholder="예: 3층 하행 승강장 2번 홈 천장">
     </div>
     <div>
-      <label style="font-size:11px; color:#aaa;">심각도 (표시 색상)</label>
+      <label style="font-size:11px; color:#aaa;">심각도 (상태 색상)</label>
       <select id="modalSeverity">
         <option value="high">긴급 (뚝뚝 떨어짐 - 적색 점멸)</option>
         <option value="mid">주의 (벽면 번짐/결로 - 황색)</option>
@@ -256,12 +255,15 @@
       </select>
     </div>
     <div>
-      <label style="font-size:11px; color:#aaa;">조치/특이사항</label>
+      <label style="font-size:11px; color:#aaa;">조치/특이사항 메모</label>
       <textarea id="modalNote" rows="2" placeholder="조치 요청사항 입력"></textarea>
     </div>
     <div class="modal-btns">
-      <button id="modalCancelBtn" class="btn-sub">취소</button>
-      <button id="modalSaveBtn" class="btn-action">저장</button>
+      <button id="modalDeleteBtn" class="btn-sub" style="background:#dc3545; display:none;">삭제</button>
+      <div style="display:flex; gap:6px; margin-left:auto;">
+        <button id="modalCancelBtn" class="btn-sub">취소</button>
+        <button id="modalSaveBtn" class="btn-action">저장</button>
+      </div>
     </div>
   </div>
 
@@ -269,9 +271,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
-    // -------------------------------------------------------------------------
-    // 1. 변수 선언 및 초기화 (초기화 순서 오류 완전 방지)
-    // -------------------------------------------------------------------------
+    // 1. 요소 참조
     const stationSelect = document.getElementById('stationSelect');
     const floorSelect = document.getElementById('floorSelect');
     const cadThemeSelect = document.getElementById('cadThemeSelect');
@@ -283,25 +283,26 @@
     const leakListContainer = document.getElementById('leakListContainer');
 
     const markerModal = document.getElementById('markerModal');
+    const modalTitleText = document.getElementById('modalTitleText');
     const modalTitle = document.getElementById('modalTitle');
     const modalSeverity = document.getElementById('modalSeverity');
     const modalNote = document.getElementById('modalNote');
     const modalSaveBtn = document.getElementById('modalSaveBtn');
     const modalCancelBtn = document.getElementById('modalCancelBtn');
+    const modalDeleteBtn = document.getElementById('modalDeleteBtn');
 
-    // 대저역 평면도 기준 좌표계 해상도
+    // 대저역 평면도 해상도 (1231 x 860)
     let imgW = 1231;
     let imgH = 860;
     let bounds = [[0, 0], [imgH, imgW]];
 
     let isAddMode = false;
     let pendingLatLng = null;
+    let editingMarkerId = null; // 수정 중인 마커 ID 추적
     let leakMarkers = [];
     let currentOverlay = null;
 
-    // -------------------------------------------------------------------------
-    // 2. Leaflet 맵 인스턴스 초기화
-    // -------------------------------------------------------------------------
+    // 2. 맵 초기화
     const map = L.map('map', {
       crs: L.CRS.Simple,
       minZoom: -1.5,
@@ -309,12 +310,9 @@
       zoomSnap: 0.1,
       attributionControl: false
     });
-
     map.fitBounds(bounds);
 
-    // -------------------------------------------------------------------------
-    // 3. 테마 적용 함수
-    // -------------------------------------------------------------------------
+    // 3. 테마 적용
     function applyCadTheme() {
       const theme = cadThemeSelect ? cadThemeSelect.value : 'dark';
       const mapEl = document.getElementById('map');
@@ -327,19 +325,14 @@
         mapEl.style.backgroundColor = '#0b2545';
         if (overlayEl) overlayEl.style.filter = 'invert(1) sepia(1) saturate(5) hue-rotate(175deg)';
       } else {
-        // 화이트 도면 원본
         mapEl.style.backgroundColor = '#f4f4f4';
         if (overlayEl) overlayEl.style.filter = 'none';
       }
     }
 
-    // -------------------------------------------------------------------------
-    // 4. 도면 로드 함수 (실물 이미지 또는 daejeo.png)
-    // -------------------------------------------------------------------------
+    // 4. 도면 로드
     function loadPlanImage(src, w, h) {
-      if (currentOverlay) {
-        map.removeLayer(currentOverlay);
-      }
+      if (currentOverlay) map.removeLayer(currentOverlay);
       imgW = w || imgW;
       imgH = h || imgH;
       bounds = [[0, 0], [imgH, imgW]];
@@ -347,19 +340,14 @@
       currentOverlay = L.imageOverlay(src, bounds).addTo(map);
       map.fitBounds(bounds);
       map.setMaxBounds(bounds);
-
-      // 이미지가 로드된 후 테마 필터 적용
       setTimeout(applyCadTheme, 50);
     }
 
-    // 기본 도면 자동 로드 시도
     loadPlanImage('daejeo.png', 1231, 860);
 
-    // 사용자가 로컬 파일을 직접 선택하여 교체할 때
     document.getElementById('imageInput').addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (!file) return;
-
       const reader = new FileReader();
       reader.onload = function(evt) {
         const img = new Image();
@@ -371,9 +359,7 @@
       reader.readAsDataURL(file);
     });
 
-    // -------------------------------------------------------------------------
-    // 5. 누수 마커 아이콘 및 생성 로직
-    // -------------------------------------------------------------------------
+    // 5. 마커 아이콘 및 팝업 갱신
     function createLeakIcon(num, severity) {
       return L.divIcon({
         className: '',
@@ -383,6 +369,21 @@
       });
     }
 
+    function updateMarkerPopup(item) {
+      const popupHtml = `
+        <div class="custom-popup-content">
+          <h4 style="margin:0 0 4px 0; font-size:13px; color:#111;">No.${item.num} ${item.title}</h4>
+          <p style="margin:0; font-size:12px; color:#555;">${item.note || '메모 없음'}</p>
+          <div class="popup-actions">
+            <button class="popup-btn popup-btn-edit" onclick="openEditModal(${item.id})">수정</button>
+            <button class="popup-btn popup-btn-del" onclick="deleteMarkerById(${item.id})">삭제</button>
+          </div>
+        </div>
+      `;
+      item.markerObj.bindPopup(popupHtml);
+    }
+
+    // 6. 목록 리렌더링
     function renderList() {
       markerCountBadge.textContent = leakMarkers.length;
       if (leakMarkers.length === 0) {
@@ -391,11 +392,11 @@
       }
 
       leakListContainer.innerHTML = '';
-      leakMarkers.forEach((item, index) => {
+      leakMarkers.forEach((item) => {
         const card = document.createElement('div');
         card.className = `leak-card ${item.severity}`;
         card.innerHTML = `
-          <div style="font-weight:bold;margin-bottom:3px;">No.${index + 1} - ${item.title}</div>
+          <div style="font-weight:bold;margin-bottom:3px;">No.${item.num} - ${item.title}</div>
           <div style="color:#aaa;">${item.note || '특이사항 없음'}</div>
           <div style="font-size:10px;color:#777;margin-top:4px;">좌표: X ${Math.round(item.x)}, Y ${Math.round(item.y)}</div>
         `;
@@ -407,11 +408,11 @@
       });
     }
 
-    // [누수 마킹] 토글 버튼
+    // 7. 마커 추가 모드 토글
     addMarkerBtn.addEventListener('click', () => {
       isAddMode = !isAddMode;
       if (isAddMode) {
-        addMarkerBtn.textContent = '도면 클릭 위치 선택중...';
+        addMarkerBtn.textContent = '도면 위치를 클릭하세요...';
         addMarkerBtn.classList.add('active');
       } else {
         addMarkerBtn.textContent = '＋ 누수 마킹';
@@ -419,66 +420,124 @@
       }
     });
 
-    // 도면 클릭 시 마킹 모달 오픈
+    // 도면 클릭 시 신규 등록 모달 열기
     map.on('click', function(e) {
       if (!isAddMode) return;
 
+      editingMarkerId = null;
       pendingLatLng = e.latlng;
+
+      modalTitleText.textContent = '누수 개소 신규 등록';
       modalTitle.value = '';
       modalNote.value = '';
+      modalSeverity.value = 'high';
+      modalDeleteBtn.style.display = 'none';
+
       markerModal.style.display = 'flex';
       modalTitle.focus();
 
-      // 마킹 대기 상태 해제
       isAddMode = false;
       addMarkerBtn.textContent = '＋ 누수 마킹';
       addMarkerBtn.classList.remove('active');
     });
 
-    // 모달 저장 버튼
-    modalSaveBtn.addEventListener('click', () => {
-      if (!pendingLatLng) return;
+    // 8. 기존 마커 수정 열기 (전역 함수)
+    window.openEditModal = function(id) {
+      const item = leakMarkers.find(m => m.id === id);
+      if (!item) return;
 
+      editingMarkerId = id;
+      modalTitleText.textContent = `No.${item.num} 누수 개소 수정`;
+      modalTitle.value = item.title;
+      modalSeverity.value = item.severity;
+      modalNote.value = item.note;
+      modalDeleteBtn.style.display = 'inline-block';
+
+      item.markerObj.closePopup();
+      markerModal.style.display = 'flex';
+      modalTitle.focus();
+    };
+
+    // 마커 삭제 (전역 함수)
+    window.deleteMarkerById = function(id) {
+      if (!confirm('해당 누수 개소를 삭제하시겠습니까?')) return;
+      const idx = leakMarkers.findIndex(m => m.id === id);
+      if (idx !== -1) {
+        map.removeLayer(leakMarkers[idx].markerObj);
+        leakMarkers.splice(idx, 1);
+        
+        // 번호 재정렬
+        leakMarkers.forEach((m, i) => {
+          m.num = i + 1;
+          m.markerObj.setIcon(createLeakIcon(m.num, m.severity));
+          updateMarkerPopup(m);
+        });
+        renderList();
+      }
+      markerModal.style.display = 'none';
+    };
+
+    // 모달 [저장] 버튼 (신규 등록 및 수정 공용)
+    modalSaveBtn.addEventListener('click', () => {
       const title = modalTitle.value.trim() || '누수 점검 개소';
       const severity = modalSeverity.value;
       const note = modalNote.value.trim();
-      const num = leakMarkers.length + 1;
 
-      const marker = L.marker([pendingLatLng.lat, pendingLatLng.lng], {
-        icon: createLeakIcon(num, severity)
-      }).addTo(map);
+      if (editingMarkerId !== null) {
+        // 기존 마커 수정
+        const item = leakMarkers.find(m => m.id === editingMarkerId);
+        if (item) {
+          item.title = title;
+          item.severity = severity;
+          item.note = note;
+          item.markerObj.setIcon(createLeakIcon(item.num, severity));
+          updateMarkerPopup(item);
+        }
+      } else if (pendingLatLng) {
+        // 신규 마커 등록
+        const newId = Date.now();
+        const num = leakMarkers.length + 1;
 
-      marker.bindPopup(`
-        <div style="color:#000;">
-          <h4 style="margin:0 0 4px 0;">No.${num} ${title}</h4>
-          <p style="margin:0;font-size:12px;color:#555;">${note || '상세 메모 없음'}</p>
-        </div>
-      `);
+        const marker = L.marker([pendingLatLng.lat, pendingLatLng.lng], {
+          icon: createLeakIcon(num, severity)
+        }).addTo(map);
 
-      leakMarkers.push({
-        num: num,
-        x: pendingLatLng.lng,
-        y: pendingLatLng.lat,
-        title: title,
-        severity: severity,
-        note: note,
-        markerObj: marker
-      });
+        const newItem = {
+          id: newId,
+          num: num,
+          x: pendingLatLng.lng,
+          y: pendingLatLng.lat,
+          title: title,
+          severity: severity,
+          note: note,
+          markerObj: marker
+        };
+
+        updateMarkerPopup(newItem);
+        leakMarkers.push(newItem);
+      }
 
       renderList();
       markerModal.style.display = 'none';
       pendingLatLng = null;
+      editingMarkerId = null;
     });
 
-    // 모달 취소 버튼
+    // 모달 [삭제] 버튼
+    modalDeleteBtn.addEventListener('click', () => {
+      if (editingMarkerId !== null) {
+        deleteMarkerById(editingMarkerId);
+      }
+    });
+
+    // 모달 [취소] 버튼
     modalCancelBtn.addEventListener('click', () => {
       markerModal.style.display = 'none';
       pendingLatLng = null;
+      editingMarkerId = null;
     });
 
-    // -------------------------------------------------------------------------
-    // 6. 부가 UI 이벤트 (테마/층수/패널)
-    // -------------------------------------------------------------------------
+    // 9. 부가 이벤트 (테마, 층수, 사이드패널)
     cadThemeSelect.addEventListener('change', applyCadTheme);
 
     floorSelect.addEventListener('change', function(e) {
@@ -486,20 +545,14 @@
       if (val === 'all') {
         map.fitBounds(bounds);
       } else if (val === '3f') {
-        // 상단 지상3층 승강장 포커스
         map.fitBounds([[480, 100], [820, 1150]]);
       } else if (val === '2f') {
-        // 하단 지상2층 대합실 포커스
         map.fitBounds([[50, 100], [450, 1150]]);
       }
     });
 
-    toggleListBtn.addEventListener('click', () => {
-      sidePanel.classList.toggle('open');
-    });
-    closePanelBtn.addEventListener('click', () => {
-      sidePanel.classList.remove('open');
-    });
+    toggleListBtn.addEventListener('click', () => sidePanel.classList.toggle('open'));
+    closePanelBtn.addEventListener('click', () => sidePanel.classList.remove('open'));
 
     // 초기 테마 적용
     applyCadTheme();
