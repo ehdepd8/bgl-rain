@@ -8,9 +8,10 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body, html { width: 100%; height: 100%; overflow: hidden; background: #1a1a1a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif; }
+    /* 기본 배경을 밝은 화이트/그레이로 지정 */
+    body, html { width: 100%; height: 100%; overflow: hidden; background: #f4f6f8; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif; }
 
-    /* 상단 컨트롤 툴바 */
+    /* 상단 컨트롤 툴바 (화이트 모드에서도 시인성 높은 스타일) */
     #top-bar {
       position: absolute;
       top: 10px;
@@ -22,13 +23,13 @@
       align-items: center;
       justify-content: space-between;
       gap: 6px;
-      background: rgba(30, 30, 30, 0.94);
+      background: rgba(255, 255, 255, 0.96);
       padding: 8px 12px;
       border-radius: 8px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-      border: 1px solid #444;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+      border: 1px solid #d0d7de;
       backdrop-filter: blur(6px);
-      color: #fff;
+      color: #24292f;
     }
 
     .group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -37,9 +38,9 @@
       font-size: 13px;
       padding: 6px 10px;
       border-radius: 5px;
-      border: 1px solid #555;
-      background: #2a2a2a;
-      color: #f1f1f1;
+      border: 1px solid #c8d1dc;
+      background: #ffffff;
+      color: #333333;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
@@ -52,20 +53,21 @@
       background: #0d6efd;
       border-color: #0d6efd;
       font-weight: bold;
-      color: #fff;
+      color: #ffffff;
     }
     .btn-action:hover { background: #0b5ed7; }
     .btn-action.active {
       background: #dc3545;
       border-color: #dc3545;
       animation: pulse-border 1.2s infinite;
+      color: #ffffff;
     }
 
-    .btn-sub { background: #3a3a3a; font-size: 12px; padding: 6px 8px; }
-    .btn-sub:hover { background: #4a4a4a; }
+    .btn-sub { background: #eef2f6; font-size: 12px; padding: 6px 8px; border-color: #cfd8dc; }
+    .btn-sub:hover { background: #e2e8f0; }
 
-    /* 지도 캔버스 */
-    #map { width: 100vw; height: 100vh; background: #121212; }
+    /* 지도 캔버스 (기본 화이트 배경) */
+    #map { width: 100vw; height: 100vh; background: #ffffff; }
 
     /* 마커 스타일 */
     .leak-marker-node {
@@ -73,7 +75,7 @@
       height: 26px;
       border-radius: 50%;
       border: 2px solid #ffffff;
-      box-shadow: 0 0 8px rgba(0,0,0,0.6);
+      box-shadow: 0 0 8px rgba(0,0,0,0.5);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -104,20 +106,20 @@
       top: 65px;
       bottom: 20px;
       width: 300px;
-      background: rgba(25, 25, 25, 0.95);
-      border: 1px solid #444;
+      background: rgba(255, 255, 255, 0.98);
+      border: 1px solid #d0d7de;
       border-radius: 8px;
-      box-shadow: -4px 0 16px rgba(0,0,0,0.6);
+      box-shadow: -4px 0 16px rgba(0,0,0,0.15);
       z-index: 1000;
       transition: right 0.3s ease;
       display: flex;
       flex-direction: column;
-      color: #fff;
+      color: #24292f;
     }
     #side-panel.open { right: 10px; }
     .panel-header {
       padding: 12px;
-      border-bottom: 1px solid #444;
+      border-bottom: 1px solid #e1e4e8;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -133,11 +135,14 @@
       gap: 8px;
     }
     .leak-card {
-      background: #333;
+      background: #f8fafc;
       padding: 10px;
       border-radius: 6px;
       font-size: 12px;
       border-left: 4px solid #0d6efd;
+      border-top: 1px solid #e2e8f0;
+      border-right: 1px solid #e2e8f0;
+      border-bottom: 1px solid #e2e8f0;
       cursor: pointer;
     }
     .leak-card.high { border-left-color: #ef4444; }
@@ -150,12 +155,12 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: #252525;
-      color: #fff;
+      background: #ffffff;
+      color: #24292f;
       padding: 18px;
       border-radius: 10px;
-      border: 1px solid #555;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+      border: 1px solid #cbd5e1;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.25);
       z-index: 2000;
       width: 90%;
       max-width: 340px;
@@ -167,9 +172,9 @@
       width: 100%;
       padding: 8px;
       border-radius: 5px;
-      border: 1px solid #444;
-      background: #1a1a1a;
-      color: #fff;
+      border: 1px solid #cbd5e1;
+      background: #f8fafc;
+      color: #1e293b;
       font-size: 13px;
     }
     .modal-btns { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
@@ -183,7 +188,7 @@
       border-radius: 4px;
       border: none;
       cursor: pointer;
-      color: #fff;
+      color: #ffffff;
     }
     .popup-btn-edit { background: #0d6efd; }
     .popup-btn-del { background: #dc3545; }
@@ -207,10 +212,11 @@
         <option value="2f">지상2층 (대합실)</option>
       </select>
 
+      <!-- 도면 원본(화이트)를 기본 선택(selected)으로 지정 -->
       <select id="cadThemeSelect">
-        <option value="dark" selected>CAD 다크</option>
+        <option value="white" selected>도면 원본(화이트)</option>
+        <option value="dark">CAD 다크</option>
         <option value="blueprint">청사진 (Blue)</option>
-        <option value="white">도면 원본(화이트)</option>
       </select>
     </div>
 
@@ -232,7 +238,7 @@
   <div id="side-panel">
     <div class="panel-header">
       <span>누수 개소 목록</span>
-      <button id="closePanelBtn" style="border:none;background:none;color:#fff;font-size:16px;">✕</button>
+      <button id="closePanelBtn" style="border:none;background:none;color:#555;font-size:16px;cursor:pointer;">✕</button>
     </div>
     <div class="panel-body" id="leakListContainer">
       <div style="text-align:center;color:#888;margin-top:20px;">등록된 누수 개소가 없습니다.</div>
@@ -241,13 +247,13 @@
 
   <!-- 누수 등록/수정 통합 모달창 -->
   <div id="markerModal">
-    <h4 id="modalTitleText" style="font-size:15px; border-bottom:1px solid #444; padding-bottom:6px;">누수 개소 등록</h4>
+    <h4 id="modalTitleText" style="font-size:15px; border-bottom:1px solid #e2e8f0; padding-bottom:6px;">누수 개소 등록</h4>
     <div>
-      <label style="font-size:11px; color:#aaa;">구역/위치 명칭</label>
+      <label style="font-size:11px; color:#64748b;">구역/위치 명칭</label>
       <input type="text" id="modalTitle" placeholder="예: 3층 하행 승강장 2번 홈 천장">
     </div>
     <div>
-      <label style="font-size:11px; color:#aaa;">심각도 (상태 색상)</label>
+      <label style="font-size:11px; color:#64748b;">심각도 (상태 색상)</label>
       <select id="modalSeverity">
         <option value="high">긴급 (뚝뚝 떨어짐 - 적색 점멸)</option>
         <option value="mid">주의 (벽면 번짐/결로 - 황색)</option>
@@ -255,11 +261,11 @@
       </select>
     </div>
     <div>
-      <label style="font-size:11px; color:#aaa;">조치/특이사항 메모</label>
+      <label style="font-size:11px; color:#64748b;">조치/특이사항 메모</label>
       <textarea id="modalNote" rows="2" placeholder="조치 요청사항 입력"></textarea>
     </div>
     <div class="modal-btns">
-      <button id="modalDeleteBtn" class="btn-sub" style="background:#dc3545; display:none;">삭제</button>
+      <button id="modalDeleteBtn" class="btn-sub" style="background:#fee2e2; color:#dc2626; border-color:#fca5a5; display:none;">삭제</button>
       <div style="display:flex; gap:6px; margin-left:auto;">
         <button id="modalCancelBtn" class="btn-sub">취소</button>
         <button id="modalSaveBtn" class="btn-action">저장</button>
@@ -298,7 +304,7 @@
 
     let isAddMode = false;
     let pendingLatLng = null;
-    let editingMarkerId = null; // 수정 중인 마커 ID 추적
+    let editingMarkerId = null;
     let leakMarkers = [];
     let currentOverlay = null;
 
@@ -312,9 +318,9 @@
     });
     map.fitBounds(bounds);
 
-    // 3. 테마 적용
+    // 3. 테마 적용 (기본값: 원본 화이트)
     function applyCadTheme() {
-      const theme = cadThemeSelect ? cadThemeSelect.value : 'dark';
+      const theme = cadThemeSelect ? cadThemeSelect.value : 'white';
       const mapEl = document.getElementById('map');
       const overlayEl = currentOverlay ? currentOverlay.getElement() : null;
 
@@ -325,7 +331,8 @@
         mapEl.style.backgroundColor = '#0b2545';
         if (overlayEl) overlayEl.style.filter = 'invert(1) sepia(1) saturate(5) hue-rotate(175deg)';
       } else {
-        mapEl.style.backgroundColor = '#f4f4f4';
+        // 도면 원본 (화이트)
+        mapEl.style.backgroundColor = '#ffffff';
         if (overlayEl) overlayEl.style.filter = 'none';
       }
     }
@@ -396,9 +403,9 @@
         const card = document.createElement('div');
         card.className = `leak-card ${item.severity}`;
         card.innerHTML = `
-          <div style="font-weight:bold;margin-bottom:3px;">No.${item.num} - ${item.title}</div>
-          <div style="color:#aaa;">${item.note || '특이사항 없음'}</div>
-          <div style="font-size:10px;color:#777;margin-top:4px;">좌표: X ${Math.round(item.x)}, Y ${Math.round(item.y)}</div>
+          <div style="font-weight:bold;margin-bottom:3px;color:#1e293b;">No.${item.num} - ${item.title}</div>
+          <div style="color:#64748b;">${item.note || '특이사항 없음'}</div>
+          <div style="font-size:10px;color:#94a3b8;margin-top:4px;">좌표: X ${Math.round(item.x)}, Y ${Math.round(item.y)}</div>
         `;
         card.addEventListener('click', () => {
           map.setView([item.y, item.x], 1);
@@ -466,7 +473,6 @@
         map.removeLayer(leakMarkers[idx].markerObj);
         leakMarkers.splice(idx, 1);
         
-        // 번호 재정렬
         leakMarkers.forEach((m, i) => {
           m.num = i + 1;
           m.markerObj.setIcon(createLeakIcon(m.num, m.severity));
@@ -477,14 +483,13 @@
       markerModal.style.display = 'none';
     };
 
-    // 모달 [저장] 버튼 (신규 등록 및 수정 공용)
+    // 모달 [저장] 버튼
     modalSaveBtn.addEventListener('click', () => {
       const title = modalTitle.value.trim() || '누수 점검 개소';
       const severity = modalSeverity.value;
       const note = modalNote.value.trim();
 
       if (editingMarkerId !== null) {
-        // 기존 마커 수정
         const item = leakMarkers.find(m => m.id === editingMarkerId);
         if (item) {
           item.title = title;
@@ -494,7 +499,6 @@
           updateMarkerPopup(item);
         }
       } else if (pendingLatLng) {
-        // 신규 마커 등록
         const newId = Date.now();
         const num = leakMarkers.length + 1;
 
@@ -537,7 +541,7 @@
       editingMarkerId = null;
     });
 
-    // 9. 부가 이벤트 (테마, 층수, 사이드패널)
+    // 9. 부가 이벤트
     cadThemeSelect.addEventListener('change', applyCadTheme);
 
     floorSelect.addEventListener('change', function(e) {
@@ -554,7 +558,7 @@
     toggleListBtn.addEventListener('click', () => sidePanel.classList.toggle('open'));
     closePanelBtn.addEventListener('click', () => sidePanel.classList.remove('open'));
 
-    // 초기 테마 적용
+    // 초기 테마(도면 원본 화이트) 실행
     applyCadTheme();
   </script>
 </body>
